@@ -1,5 +1,7 @@
 package cc.dewdrop.ffplayer.utils;
 
+import android.os.Build;
+
 /**
  * Created by Zhang Tingkuo.
  * Date: 2017-07-21
@@ -7,6 +9,10 @@ package cc.dewdrop.ffplayer.utils;
  */
 
 public class FFUtils {
+
+    static {
+        System.loadLibrary("native-lib");
+    }
 
     public static native String urlProtocolInfo();
 
