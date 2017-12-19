@@ -4,37 +4,38 @@
 
 > 
 > abi support: `armeabi` `armeabi-v7a` `arm64-v8a` `x86` `x86_64`
+> ndk version android-ndk-r15c
 >
 
 ### download ffmpeg
 ---
 ```
-wget http://ffmpeg.org/releases/ffmpeg-3.3.2.tar.bz2
-tar xvf ffmpeg-3.3.2.tar.bz2
+wget http://ffmpeg.org/releases/ffmpeg-3.4.1.tar.bz2
+tar xvf ffmpeg-3.4.1.tar.bz2
 ```
 
 ### compile
 ---
 ``` bash
-PREFIX=android-build-debug
-HOST_PLATFORM=windows-x86_64
+#!/bin/sh
+
+PREFIX=android-build
 
 COMMON_OPTIONS="\
-    --prefix=${PREFIX}/ \
+    --prefix=android/ \
     --target-os=android \
-    --enable-shared \
-    --enable-avresample \
-    --enable-small \
-    --enable-cross-compile \
     --disable-static \
-    --disable-doc \
-    --disable-programs \
+    --enable-shared \
+    --enable-small \
     --disable-ffmpeg \
     --disable-ffplay \
     --disable-ffprobe \
     --disable-ffserver \
+    --disable-doc \
+    --enable-avresample \
     --disable-symver \
-    --disable-yasm \
+    --disable-asm \
+    --disable-armv5te \
     "
 
 function build_android {
@@ -44,12 +45,12 @@ function build_android {
     --pkgconfigdir=${PREFIX}/pkgconfig/armeabi \
     --arch=arm \
     --cpu=armv6 \
-    --cross-prefix="${NDK_PATH}/toolchains/arm-linux-androideabi-4.9/prebuilt/${HOST_PLATFORM}/bin/arm-linux-androideabi-" \
-    --sysroot="${NDK_PATH}/platforms/android-21/arch-arm/" \
+    --cross-prefix="${NDK_HOME}/toolchains/arm-linux-androideabi-4.9/prebuilt/${NDK_HOST_PLATFORM}/bin/arm-linux-androideabi-" \
+    --sysroot="${NDK_HOME}/platforms/android-21/arch-arm/" \
     --extra-ldexeflags=-pie \
     ${COMMON_OPTIONS}
     make clean
-    make -j4 && make install
+    make -j8 && make install
 
     ./configure \
     --libdir=${PREFIX}/libs/armeabi-v7a \
@@ -57,14 +58,13 @@ function build_android {
     --pkgconfigdir=${PREFIX}/pkgconfig/armeabi-v7a \
     --arch=arm \
     --cpu=armv7-a \
-    --cross-prefix="${NDK_PATH}/toolchains/arm-linux-androideabi-4.9/prebuilt/${HOST_PLATFORM}/bin/arm-linux-androideabi-" \
-    --sysroot="${NDK_PATH}/platforms/android-21/arch-arm/" \
+    --cross-prefix="${NDK_HOME}/toolchains/arm-linux-androideabi-4.9/prebuilt/${NDK_HOST_PLATFORM}/bin/arm-linux-androideabi-" \
+    --sysroot="${NDK_HOME}/platforms/android-21/arch-arm/" \
     --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=neon" \
-    --extra-ldflags="-Wl,--fix-cortex-a8" \
     --extra-ldexeflags=-pie \
     ${COMMON_OPTIONS}
     make clean
-    make -j4 && make install
+    make -j8 && make install
 
     ./configure \
     --libdir=${PREFIX}/libs/arm64-v8a \
@@ -72,12 +72,12 @@ function build_android {
     --pkgconfigdir=${PREFIX}/pkgconfig/arm64-v8a \
     --arch=aarch64 \
     --cpu=armv8-a \
-    --cross-prefix="${NDK_PATH}/toolchains/aarch64-linux-android-4.9/prebuilt/${HOST_PLATFORM}/bin/aarch64-linux-android-" \
-    --sysroot="${NDK_PATH}/platforms/android-21/arch-arm64/" \
+    --cross-prefix="${NDK_HOME}/toolchains/aarch64-linux-android-4.9/prebuilt/${NDK_HOST_PLATFORM}/bin/aarch64-linux-android-" \
+    --sysroot="${NDK_HOME}/platforms/android-21/arch-arm64/" \
     --extra-ldexeflags=-pie \
-    ${COMMON_OPTIONS} 
+    ${COMMON_OPTIONS}
     make clean
-    make -j4 && make install
+    make -j8 && make install
 
     ./configure \
     --libdir=${PREFIX}/libs/x86 \
@@ -85,13 +85,12 @@ function build_android {
     --pkgconfigdir=${PREFIX}/pkgconfig/x86 \
     --arch=x86 \
     --cpu=i686 \
-    --cross-prefix="${NDK_PATH}/toolchains/x86-4.9/prebuilt/${HOST_PLATFORM}/bin/i686-linux-android-" \
-    --sysroot="${NDK_PATH}/platforms/android-21/arch-x86/" \
+    --cross-prefix="${NDK_HOME}/toolchains/x86-4.9/prebuilt/${NDK_HOST_PLATFORM}/bin/i686-linux-android-" \
+    --sysroot="${NDK_HOME}/platforms/android-21/arch-x86/" \
     --extra-ldexeflags=-pie \
-    --disable-asm \
-    ${COMMON_OPTIONS} 
+    ${COMMON_OPTIONS}
     make clean
-    make -j4 && make install
+    make -j8 && make install
 
     ./configure \
     --libdir=${PREFIX}/libs/x86_64 \
@@ -99,14 +98,14 @@ function build_android {
     --pkgconfigdir=${PREFIX}/pkgconfig/x86_64 \
     --arch=x86_64 \
     --cpu=x86_64 \
-    --cross-prefix="${NDK_PATH}/toolchains/x86_64-4.9/prebuilt/${HOST_PLATFORM}/bin/x86_64-linux-android-" \
-    --sysroot="${NDK_PATH}/platforms/android-21/arch-x86_64/" \
+    --cross-prefix="${NDK_HOME}/toolchains/x86_64-4.9/prebuilt/${NDK_HOST_PLATFORM}/bin/x86_64-linux-android-" \
+    --sysroot="${NDK_HOME}/platforms/android-21/arch-x86_64/" \
     --extra-ldexeflags=-pie \
-    --disable-asm \
     ${COMMON_OPTIONS}
     make clean
-    make -j4 && make install
-}
+    make -j8 && make install
+
+};
 
 build_android
 ```

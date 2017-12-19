@@ -36,13 +36,6 @@ set_target_properties(swscale
                       PROPERTIES IMPORTED_LOCATION
                       ${JNI_LIBS_DIR}/${ANDROID_ABI}/libswscale.so )
 
-add_library(postproc
-            SHARED
-            IMPORTED )
-set_target_properties(postproc
-                      PROPERTIES IMPORTED_LOCATION
-                      ${JNI_LIBS_DIR}/${ANDROID_ABI}/libpostproc.so )
-
 add_library(avcodec
             SHARED
             IMPORTED )
@@ -74,5 +67,5 @@ set_target_properties(avdevice
 include_directories(${JNI_LIBS_DIR}/includes)
 
 target_link_libraries(native-lib
-                      avutil swresample avresample swscale postproc avcodec avformat avfilter avdevice
+                      avutil swresample avresample swscale avcodec avformat avfilter avdevice
                       ${log-lib} )
