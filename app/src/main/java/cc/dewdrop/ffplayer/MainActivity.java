@@ -1,22 +1,26 @@
 package cc.dewdrop.ffplayer;
 
+import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 
 import cc.dewdrop.ffplayer.utils.FFUtils;
+import cc.dewdrop.ffplayer.widget.FFVideoView;
 
 public class MainActivity extends AppCompatActivity {
 
     private TextView mTextView;
+    private FFVideoView mVideoView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mTextView = (TextView) findViewById(R.id.sample_text);
+        mTextView = findViewById(R.id.sample_text);
+        mVideoView = findViewById(R.id.videoView);
     }
 
     public void onButtonClick(View view) {
@@ -34,6 +38,10 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case R.id.button_format:
                 setInfoText(FFUtils.avFormatInfo());
+                break;
+            case R.id.button_play:
+                String videoPath = Environment.getExternalStorageDirectory() + "/Movies/PERU.MP4";
+                mVideoView.playVideo(videoPath);
                 break;
         }
     }

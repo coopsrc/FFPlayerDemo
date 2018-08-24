@@ -1,6 +1,7 @@
 package cc.dewdrop.ffplayer.utils;
 
 import android.os.Build;
+import android.view.Surface;
 
 /**
  * Created by Zhang Tingkuo.
@@ -21,4 +22,6 @@ public class FFUtils {
     public static native String avCodecInfo();
 
     public static native String avFilterInfo();
+
+    public static native void playVideo(String videoPath, Surface surface);
 }

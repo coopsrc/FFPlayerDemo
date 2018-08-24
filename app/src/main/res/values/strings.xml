@@ -4,4 +4,5 @@
     <string name="button_codec">Codec</string>
     <string name="button_filter">Filter</string>
     <string name="button_format">Format</string>
+    <string name="button_play">Play</string>
 </resources>
