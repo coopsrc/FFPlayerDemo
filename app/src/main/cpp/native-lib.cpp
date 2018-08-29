@@ -18,6 +18,8 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavfilter/avfilter.h>
 #include <libswscale/swscale.h>
+#include "libswresample/swresample.h"
+#include "libavutil/opt.h"
 #include <libavutil/imgutils.h>
 
 
@@ -123,134 +125,163 @@ Java_cc_dewdrop_ffplayer_utils_FFUtils_playVideo(JNIEnv *env, jclass type, jstri
         return;
     }
 
-    //注册FFmpeg所有编解码器，以及相关协议。
-    av_register_all();
-
-    //分配结构体
     AVFormatContext *formatContext = avformat_alloc_context();
 
-    //打开视频数据源。由于Android 对SDK存储权限的原因，如果没有为当前项目赋予SDK存储权限，打开本地视频文件时会失败
-    int open_state = avformat_open_input(&formatContext, videoPath, NULL, NULL);
-    if (open_state < 0) {
-        char errbuf[128];
-        if (av_strerror(open_state, errbuf, sizeof(errbuf) == 0)) {
-            ALOGE("open video file error: %s", errbuf);
-        }
+    // open video file
+    ALOGI("Open video file");
+    if (avformat_open_input(&formatContext, videoPath, NULL, NULL) != 0) {
+        ALOGE("Cannot open video file: %s\n", videoPath);
         return;
     }
 
-    //为分配的AVFormatContext 结构体中填充数据
+    // Retrieve stream information
+    ALOGI("Retrieve stream information");
     if (avformat_find_stream_info(formatContext, NULL) < 0) {
-        ALOGE("Read video stream failed.");
+        ALOGE("Cannot find stream information.");
         return;
     }
 
+    // Find the first video stream
+    ALOGI("Find video stream");
     int video_stream_index = -1;
-    ALOGD("当前视频数据，包含的数据流数量：%d", formatContext->nb_streams);
     for (int i = 0; i < formatContext->nb_streams; i++) {
-
-        //如果是数据流的编码格式为AVMEDIA_TYPE_VIDEO——视频流。
         if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            video_stream_index = i;//记录视频流下标
-            break;
+            video_stream_index = i;
         }
     }
+
     if (video_stream_index == -1) {
-        ALOGD("没有找到 视频流。");
-        return;
+        ALOGE("No video stream found.");
+        return; // no video stream found.
     }
 
-    //通过编解码器的id——codec_id 获取对应（视频）流解码器
+    // Get a pointer to the codec context for the video stream
+    ALOGI("Get a pointer to the codec context for the video stream");
     AVCodecParameters *codecParameters = formatContext->streams[video_stream_index]->codecpar;
-    AVCodec *videoDecoder = avcodec_find_decoder(codecParameters->codec_id);
 
-    if (videoDecoder == NULL) {
-        ALOGD("未找到对应的流解码器。");
-        return;
+    // Find the decoder for the video stream
+    ALOGI("Find the decoder for the video stream");
+    AVCodec *codec = avcodec_find_decoder(codecParameters->codec_id);
+    if (codec == NULL) {
+        ALOGE("Codec not found.");
+        return; // Codec not found
     }
-    //通过解码器分配(并用  默认值   初始化)一个解码器context
-    AVCodecContext *codecContext = avcodec_alloc_context3(videoDecoder);
+
+    AVCodecContext *codecContext = avcodec_alloc_context3(codec);
 
     if (codecContext == NULL) {
-        ALOGD("分配 解码器上下文失败。");
-        return;
+        ALOGE("CodecContext not found.");
+        return; // CodecContext not found
     }
-    //更具指定的编码器值填充编码器上下文
+
+    // fill CodecContext according to CodecParameters
     if (avcodec_parameters_to_context(codecContext, codecParameters) < 0) {
-        ALOGD("填充编解码器上下文失败。");
+        ALOGD("Fill CodecContext failed.");
         return;
     }
-    //通过所给的编解码器初始化编解码器上下文
-    if (avcodec_open2(codecContext, videoDecoder, NULL) < 0) {
-        ALOGD("初始化 解码器上下文失败。");
+
+    // init codex context
+    ALOGI("open Codec");
+    if (avcodec_open2(codecContext, codec, NULL)) {
+        ALOGE("Init CodecContext failed.");
         return;
     }
+
     AVPixelFormat dstFormat = AV_PIX_FMT_RGBA;
-    //分配存储压缩数据的结构体对象AVPacket
-    //如果是视频流，AVPacket会包含一帧的压缩数据。
-    //但如果是音频则可能会包含多帧的压缩数据
-    AVPacket *packet = av_packet_alloc();
-    //分配解码后的每一数据信息的结构体（指针）
-    AVFrame *frame = av_frame_alloc();
-    //分配最终显示出来的目标帧信息的结构体（指针）
-    AVFrame *outFrame = av_frame_alloc();
-    uint8_t *out_buffer = (uint8_t *) av_malloc(
-            (size_t) av_image_get_buffer_size(dstFormat, codecContext->width, codecContext->height,
-                                              1));
-    //更具指定的数据初始化/填充缓冲区
-    av_image_fill_arrays(outFrame->data, outFrame->linesize, out_buffer, dstFormat,
-                         codecContext->width, codecContext->height, 1);
-    //初始化SwsContext
 
-    SwsContext *swsContext = sws_getContext(
-            codecContext->width   //原图片的宽
-            , codecContext->height  //源图高
-            , codecContext->pix_fmt //源图片format
-            , codecContext->width  //目标图的宽
-            , codecContext->height  //目标图的高
-            , dstFormat, SWS_BICUBIC, NULL, NULL, NULL
-    );
-    if (swsContext == NULL) {
-        ALOGD("swsContext==NULL");
+    // Allocate av packet
+    AVPacket *packet = av_packet_alloc();
+    if (packet == NULL) {
+        ALOGD("Could not allocate av packet.");
         return;
     }
-    //Android 原生绘制工具
-    ANativeWindow *nativeWindow = ANativeWindow_fromSurface(env, surface);
-    //定义绘图缓冲区
-    ANativeWindow_Buffer outBuffer;
-    //通过设置宽高限制缓冲区中的像素数量，而非屏幕的物流显示尺寸。
-    //如果缓冲区与物理屏幕的显示尺寸不相符，则实际显示可能会是拉伸，或者被压缩的图像
-    ANativeWindow_setBuffersGeometry(nativeWindow, codecContext->width, codecContext->height,
-                                     WINDOW_FORMAT_RGBA_8888);
-    //循环读取数据流的下一帧
-    while (av_read_frame(formatContext, packet) == 0) {
 
+    // Allocate video frame
+    ALOGI("Allocate video frame");
+    AVFrame *frame = av_frame_alloc();
+    // Allocate render frame
+    ALOGI("Allocate render frame");
+    AVFrame *renderFrame = av_frame_alloc();
+
+    if (frame == NULL || renderFrame == NULL) {
+        ALOGD("Could not allocate video frame.");
+        return;
+    }
+
+    // Determine required buffer size and allocate buffer
+    ALOGI("Determine required buffer size and allocate buffer");
+    int size = av_image_get_buffer_size(dstFormat, codecContext->width, codecContext->height, 1);
+    uint8_t *buffer = (uint8_t *) av_malloc(size * sizeof(uint8_t));
+    av_image_fill_arrays(renderFrame->data, renderFrame->linesize, buffer, dstFormat,
+                         codecContext->width, codecContext->height, 1);
+
+    // init SwsContext
+    ALOGI("init SwsContext");
+    struct SwsContext *swsContext = sws_getContext(codecContext->width,
+                                                   codecContext->height,
+                                                   codecContext->pix_fmt,
+                                                   codecContext->width,
+                                                   codecContext->height,
+                                                   dstFormat,
+                                                   SWS_BILINEAR,
+                                                   NULL,
+                                                   NULL,
+                                                   NULL);
+    if (swsContext == NULL) {
+        ALOGE("Init SwsContext failed.");
+        return;
+    }
+
+    // native window
+    ALOGI("native window");
+    ANativeWindow *nativeWindow = ANativeWindow_fromSurface(env, surface);
+    ANativeWindow_Buffer windowBuffer;
+
+    // get video width , height
+    ALOGI("get video width , height");
+    int videoWidth = codecContext->width;
+    int videoHeight = codecContext->height;
+    ALOGI("VideoSize: [%d,%d]", videoWidth, videoHeight);
+
+    // 设置native window的buffer大小,可自动拉伸
+    ALOGI("set native window");
+    ANativeWindow_setBuffersGeometry(nativeWindow, videoWidth, videoHeight,
+                                     WINDOW_FORMAT_RGBA_8888);
+
+
+    ALOGI("read frame");
+    while (av_read_frame(formatContext, packet) == 0) {
+        // Is this a packet from the video stream?
         if (packet->stream_index == video_stream_index) {
-            //讲原始数据发送到解码器
+
+            // Send origin data to decoder
             int sendPacketState = avcodec_send_packet(codecContext, packet);
             if (sendPacketState == 0) {
+                ALOGD("向解码器-发送数据");
+
                 int receiveFrameState = avcodec_receive_frame(codecContext, frame);
                 if (receiveFrameState == 0) {
-                    //锁定窗口绘图界面
-                    ANativeWindow_lock(nativeWindow, &outBuffer, NULL);
-                    //对输出图像进行色彩，分辨率缩放，滤波处理
-                    sws_scale(swsContext, (const uint8_t *const *) frame->data, frame->linesize, 0,
-                              frame->height, outFrame->data, outFrame->linesize);
-                    uint8_t *dst = (uint8_t *) outBuffer.bits;
-                    //解码后的像素数据首地址
-                    //这里由于使用的是RGBA格式，所以解码图像数据只保存在data[0]中。但如果是YUV就会有data[0]
-                    //data[1],data[2]
-                    uint8_t *src = outFrame->data[0];
-                    //获取一行字节数
-                    int oneLineByte = outBuffer.stride * 4;
-                    //复制一行内存的实际数量
-                    int srcStride = outFrame->linesize[0];
-                    for (int i = 0; i < codecContext->height; i++) {
-                        memcpy(dst + i * oneLineByte, src + i * srcStride, srcStride);
-                    }
-                    //解锁
-                    ANativeWindow_unlockAndPost(nativeWindow);
+                    ALOGD("从解码器-接收数据");
+                    // lock native window buffer
+                    ANativeWindow_lock(nativeWindow, &windowBuffer, NULL);
 
+                    // 格式转换
+                    sws_scale(swsContext, (uint8_t const *const *) frame->data,
+                              frame->linesize, 0, codecContext->height,
+                              renderFrame->data, renderFrame->linesize);
+
+                    // 获取stride
+                    uint8_t *dst = (uint8_t *) windowBuffer.bits;
+                    uint8_t *src = (renderFrame->data[0]);
+                    int dstStride = windowBuffer.stride * 4;
+                    int srcStride = renderFrame->linesize[0];
+
+                    // 由于window的stride和帧的stride不同,因此需要逐行复制
+                    for (int i = 0; i < videoHeight; i++) {
+                        memcpy(dst + i * dstStride, src + i * srcStride, srcStride);
+                    }
+
+                    ANativeWindow_unlockAndPost(nativeWindow);
                 } else if (receiveFrameState == AVERROR(EAGAIN)) {
                     ALOGD("从解码器-接收-数据失败：AVERROR(EAGAIN)");
                 } else if (receiveFrameState == AVERROR_EOF) {
@@ -271,14 +302,19 @@ Java_cc_dewdrop_ffplayer_utils_FFUtils_playVideo(JNIEnv *env, jclass type, jstri
             } else {
                 ALOGD("向解码器-发送-数据失败：未知");
             }
+
         }
         av_packet_unref(packet);
     }
+
+
     //内存释放
+    ALOGI("release memory");
     ANativeWindow_release(nativeWindow);
-    av_frame_free(&outFrame);
     av_frame_free(&frame);
+    av_frame_free(&renderFrame);
     av_packet_free(&packet);
+    avcodec_close(codecContext);
     avcodec_free_context(&codecContext);
     avformat_close_input(&formatContext);
     avformat_free_context(formatContext);
