@@ -1,8 +1,8 @@
 package cc.dewdrop.ffplayer;
 
+import android.os.Bundle;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 
@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
                 setInfoText(FFUtils.avFormatInfo());
                 break;
             case R.id.button_play:
-                String videoPath = Environment.getExternalStorageDirectory() + "/Movies/PERU.MP4";
+                String videoPath = Environment.getExternalStorageDirectory() + "/Movies/Peru.mp4";
                 mVideoView.playVideo(videoPath);
                 break;
         }
