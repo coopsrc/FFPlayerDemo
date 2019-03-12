@@ -19,6 +19,14 @@ android {
             abiFilters 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
         }
     }
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            universalApk true
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
