@@ -4,128 +4,155 @@
 
 * 2018-04-21: update ffmpeg-4.0.
 * 2018-11-16: update script.
-* 2019-03-11: update script, add armeabi abi support.
+* 2019-03-11: update script, add `armeabi` abi support.
+* 2019-04-03: update script, use `android-ndk-r15c`
+* 2019-04-25: update script, update ffmpeg to 4.0.4, add `build_ffmpeg.sh`
 
 
 > 
-> abi support: `armeabi-v7a` `arm64-v8a` `x86` `x86_64`
-> ndk version: `android-ndk-r14b`
+> abi support: `armeabi` `armeabi-v7a` `arm64-v8a` `x86` `x86_64`
+> ndk version: `android-ndk-r15c`
+> ffmpeg: 4.0.4
 >
 
 ### download ffmpeg
 ---
 ```
-wget https://ffmpeg.org/releases/ffmpeg-4.0.tar.bz2
-tar xvf ffmpeg-4.0.tar.bz2
+wget https://ffmpeg.org/releases/ffmpeg-4.0.4.tar.bz2
+tar xvf ffmpeg-4.0.4.tar.bz2
 ```
 
 ### compile
 ---
 ``` bash
-#!/bin/sh
+#!/usr/bin/env bash
 
-NDK_HOME=/opt/android/android-ndk-r14b
+NDK_HOME=/opt/android/android-ndk-r15c
 PREFIX=android-build
 HOST_PLATFORM=linux-x86_64
 PLATFORM=android-21
+CONFIG_LOG_PATH=${PREFIX}/log
 
 COMMON_OPTIONS="\
-    --target-os=android \
-    --disable-static \
-    --enable-shared \
-    --enable-small \
-    --enable-cross-compile \
-    --enable-neon \
-    --disable-programs \
-    --disable-ffmpeg \
-    --disable-ffplay \
-    --disable-ffprobe \
-    --disable-doc \
-    --disable-symver \
-    --disable-asm \
-    --enable-decoder=h264 \
-	--enable-decoder=mpeg4 \
-	--enable-decoder=mjpeg \
-	--enable-decoder=png \
-    --enable-decoder=vorbis \
-    --enable-decoder=opus \
-    --enable-decoder=flac 
-    "
+--target-os=android \
+--disable-static \
+--enable-shared \
+--enable-small \
+--enable-cross-compile \
+--disable-programs \
+--disable-ffmpeg \
+--disable-ffplay \
+--disable-ffprobe \
+--disable-doc \
+--disable-symver \
+--enable-decoder=h264 \
+--enable-decoder=mpeg4 \
+--enable-decoder=mjpeg \
+--enable-decoder=png \
+--enable-decoder=vorbis \
+--enable-decoder=opus \
+--enable-decoder=flac "
+
+build(){
+    APP_ABI=$1
+    ARCH=$2
+    CPU=$3
+    MARCH=$4
+    echo "======== > Start build $APP_ABI $ARCH $CPU $MARCH"
+    case ${APP_ABI} in
+    armeabi )
+        CROSS_PREFIX="$NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/$HOST_PLATFORM/bin/arm-linux-androideabi-"
+        SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-arm"
+        EXTRA_CFLAGS="-march=$MARCH"
+        EXTRA_LDFLAGS=""
+        EXTRA_OPTIONS="--disable-x86asm"
+    ;;
+    armeabi-v7a )
+        CROSS_PREFIX="$NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/$HOST_PLATFORM/bin/arm-linux-androideabi-"
+        SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-arm"
+        EXTRA_CFLAGS="-march=$MARCH -mfloat-abi=softfp"
+        EXTRA_LDFLAGS="-Wl,--fix-cortex-a8"
+        EXTRA_OPTIONS="--enable-neon --disable-x86asm"
+    ;;
+    arm64-v8a )
+        CROSS_PREFIX="$NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/$HOST_PLATFORM/bin/aarch64-linux-android-"
+        SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-arm64"
+        EXTRA_CFLAGS="-march=$MARCH"
+        EXTRA_LDFLAGS=""
+        EXTRA_OPTIONS="--enable-neon --disable-x86asm"
+    ;;
+    x86 )
+        CROSS_PREFIX="$NDK_HOME/toolchains/x86-4.9/prebuilt/$HOST_PLATFORM/bin/i686-linux-android-"
+        SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-x86"
+        EXTRA_CFLAGS="-march=$MARCH"
+        EXTRA_LDFLAGS=""
+        EXTRA_OPTIONS="--disable-asm"
+    ;;
+    x86_64 )
+        CROSS_PREFIX="$NDK_HOME/toolchains/x86_64-4.9/prebuilt/$HOST_PLATFORM/bin/x86_64-linux-android-"
+        SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-x86_64"
+        EXTRA_CFLAGS="-march=$MARCH"
+        EXTRA_LDFLAGS=""
+        EXTRA_OPTIONS="--disable-asm"
+    ;;
+    esac
+
+    echo "-------- > Start clean workspace"
+    make clean
+
+    echo "-------- > Start build configuration"
+    configuration="\
+--logfile=$CONFIG_LOG_PATH/config_$APP_ABI.log \
+--prefix=$PREFIX \
+--libdir=$PREFIX/libs/$APP_ABI \
+--incdir=$PREFIX/includes/$APP_ABI \
+--pkgconfigdir=$PREFIX/pkgconfig/$APP_ABI \
+--arch=$ARCH \
+--cpu=$CPU \
+--cross-prefix=$CROSS_PREFIX \
+--sysroot=$SYSROOT \
+--extra-cflags='$EXTRA_CFLAGS' \
+--extra-ldflags='$EXTRA_LDFLAGS' \
+--extra-ldexeflags=-pie \
+$EXTRA_OPTIONS \
+$COMMON_OPTIONS
+"
+
+    echo "-------- > Start config makefile with $configuration"
+    ./configure \
+--logfile=${CONFIG_LOG_PATH}/config_${APP_ABI}.log \
+--prefix=${PREFIX} \
+--libdir=${PREFIX}/libs/${APP_ABI} \
+--incdir=${PREFIX}/includes/${APP_ABI} \
+--pkgconfigdir=${PREFIX}/pkgconfig/${APP_ABI} \
+--arch=${ARCH} \
+--cpu=${CPU} \
+--cross-prefix=${CROSS_PREFIX} \
+--sysroot=${SYSROOT} \
+--extra-cflags="$EXTRA_CFLAGS" \
+--extra-ldflags="$EXTRA_LDFLAGS" \
+--extra-ldexeflags=-pie \
+${EXTRA_OPTIONS} \
+${COMMON_OPTIONS}
+
+    echo "-------- > Start make $APP_ABI with -j8"
+    make j8
+
+    echo "-------- > Start install $APP_ABI"
+    make install
+    echo "++++++++ > make and install $APP_ABI complete."
+
+}
 
 build_all(){
-    for version in armeabi armeabi-v7a arm64-v8a x86 x86_64; do
-        echo "======== > Start build $version"
-        case ${version} in
-        armeabi )
-            ARCH="arm"
-            CPU="armv5te"
-            CROSS_PREFIX="$NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/$HOST_PLATFORM/bin/arm-linux-androideabi-"
-            SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-arm/"
-            EXTRA_CFLAGS="-march=armv5te"
-            EXTRA_LDFLAGS="-Wl,-L${SYSROOT}/usr/lib"
-        ;;
-        armeabi-v7a )
-            ARCH="arm"
-            CPU="armv7-a"
-            CROSS_PREFIX="$NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/$HOST_PLATFORM/bin/arm-linux-androideabi-"
-            SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-arm/"
-            EXTRA_CFLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=softfp -mvectorize-with-neon-quad"
-            EXTRA_LDFLAGS="-Wl,--fix-cortex-a8 -L${SYSROOT}/usr/lib"
-        ;;
-        arm64-v8a )
-            ARCH="aarch64"
-            CPU="armv8-a"
-            CROSS_PREFIX="$NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/$HOST_PLATFORM/bin/aarch64-linux-android-"
-            SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-arm64/"
-            EXTRA_CFLAGS="-march=armv8-a"
-            EXTRA_LDFLAGS="-Wl,-L${SYSROOT}/usr/lib"
-        ;;
-        x86 )
-            ARCH="x86"
-            CPU="i686"
-            CROSS_PREFIX="$NDK_HOME/toolchains/x86-4.9/prebuilt/$HOST_PLATFORM/bin/i686-linux-android-"
-            SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-x86/"
-            EXTRA_CFLAGS="-march=i686 -mtune=intel -mssse3 -mfpmath=sse -m32"
-            EXTRA_LDFLAGS="-Wl,-L${SYSROOT}/usr/lib"
-        ;;
-        x86_64 )
-            ARCH="x86_64"
-            CPU="x86_64"
-            CROSS_PREFIX="$NDK_HOME/toolchains/x86_64-4.9/prebuilt/$HOST_PLATFORM/bin/x86_64-linux-android-"
-            SYSROOT="$NDK_HOME/platforms/$PLATFORM/arch-x86_64/"
-            EXTRA_CFLAGS="-march=x86-64 -msse4.2 -mpopcnt -m64 -mtune=intel"
-            EXTRA_LDFLAGS="-Wl,-L${SYSROOT}/usr/lib"
-        ;;
-        esac
+    mkdir -p ${CONFIG_LOG_PATH}
 
-        echo "-------- > Start clean workspace"
-        make clean
-
-        echo "-------- > Start config makefile"
-        configuration="\
-            --prefix=${PREFIX} \
-            --libdir=${PREFIX}/libs/${version}
-            --incdir=${PREFIX}/includes/${version} \
-            --pkgconfigdir=${PREFIX}/pkgconfig/${version} \
-            --arch=${ARCH} \
-            --cpu=${CPU} \
-            --cross-prefix=${CROSS_PREFIX} \
-            --sysroot=${SYSROOT} \
-            --extra-ldexeflags=-pie \
-            ${COMMON_OPTIONS}
-            "
-
-        echo "-------- > Start config makefile with ${configuration}"
-        ./configure ${configuration}
-
-        echo "-------- > Start make ${version} with -j8"
-        make j8
-
-        echo "-------- > Start install ${version}"
-        make install
-        echo "++++++++ > make and install ${version} complete."
-
-    done
+#    build $app_abi $arch $cpu $march
+    build "armeabi" "arm" "armv5te" "armv5te"
+    build "armeabi-v7a" "arm" "armv7-a" "armv7-a"
+    build "arm64-v8a" "aarch64" "armv8-a" "armv8-a"
+    build "x86" "x86" "i686" "i686"
+    build "x86_64" "x86_64" "x86_64" "x86-64"
 }
 
 echo "-------- Start --------"
