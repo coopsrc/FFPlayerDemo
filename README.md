@@ -175,6 +175,7 @@ build_all(){
     COMMON_OPTIONS="$COMMON_OPTIONS --enable-jni"
     COMMON_OPTIONS="$COMMON_OPTIONS --enable-zlib"
     COMMON_OPTIONS="$COMMON_OPTIONS --enable-pic"
+    COMMON_OPTIONS="$COMMON_OPTIONS --enable-avresample"
     COMMON_OPTIONS="$COMMON_OPTIONS --enable-decoder=h264"
     COMMON_OPTIONS="$COMMON_OPTIONS --enable-decoder=mpeg4"
     COMMON_OPTIONS="$COMMON_OPTIONS --enable-decoder=mjpeg"

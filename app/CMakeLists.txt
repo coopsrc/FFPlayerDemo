@@ -16,6 +16,13 @@ set_target_properties(avutil
                       PROPERTIES IMPORTED_LOCATION
                       ${JNI_LIBS_DIR}/${ANDROID_ABI}/libavutil.so )
 
+add_library(avresample
+            SHARED
+            IMPORTED )
+set_target_properties(avresample
+                      PROPERTIES IMPORTED_LOCATION
+                      ${JNI_LIBS_DIR}/${ANDROID_ABI}/libavresample.so )
+
 add_library(swresample
             SHARED
             IMPORTED )
@@ -61,5 +68,5 @@ set_target_properties(avdevice
 include_directories(${JNI_LIBS_DIR}/includes)
 
 target_link_libraries(native-lib
-                      avutil swresample swscale avcodec avformat avfilter avdevice
+                      avutil avresample swresample swscale avcodec avformat avfilter avdevice
                       ${log-lib} ${android-lib} )
